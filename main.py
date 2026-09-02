@@ -1,3 +1,4 @@
+
 import os
 import time
 import json
@@ -14,11 +15,10 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8876666395:AAFqZNNnqcz-TPiwuVIGzWWxUBHwas-orNg")
 CHAT_ID = os.getenv("CHAT_ID", "8569472160")
 
-CHECK_INTERVAL = 40                 # секунд между проверками
-DISCOUNT_THRESHOLD = 0.15            # 15% и больше
-MIN_COMPARABLES = 4
+CHECK_INTERVAL = 90                  # проверка каждые 1.5 минуты
+DISCOUNT_THRESHOLD = 0.08            # 8% и больше (было 15%)
+MIN_COMPARABLES = 2                  # минимум похожих (было 4)
 SEEN_FILE = "seen_apartments.json"
-USD_KGS_RATE = 87.5
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -40,7 +40,7 @@ def load_seen():
     return set()
 
 def save_seen(seen):
-    recent = list(seen)[-5000:]
+    recent = list(seen)[-6000:]
     with open(SEEN_FILE, "w") as f:
         json.dump(recent, f)
 
@@ -165,7 +165,7 @@ def get_listings(page=1):
                 "floor": floor,
                 "address": address,
                 "photo": photo,
-                "price_per_m2": price_usd / area if area else None
+                "price_per_m2": round(price_usd / area, 1) if area else None
             })
         except Exception as e:
             print("Ошибка парсинга карточки:", e)
@@ -178,9 +178,9 @@ def get_market_price_per_m2(rooms, area, all_recent_listings):
     for item in all_recent_listings:
         if item["rooms"] != rooms:
             continue
-        if not item["area"] or abs(item["area"] - area) > area * 0.25:
+        if not item["area"] or abs(item["area"] - area) > area * 0.30:
             continue
-        if item["price_per_m2"] and 400 < item["price_per_m2"] < 4000:
+        if item["price_per_m2"] and 350 < item["price_per_m2"] < 4500:
             prices.append(item["price_per_m2"])
 
     if len(prices) < MIN_COMPARABLES:
@@ -192,7 +192,7 @@ def analyze_and_notify(ad, seen, market_listings):
     if ad_id in seen:
         return
 
-    if not ad["price_per_m2"] or ad["price_usd"] < 15000:
+    if not ad["price_per_m2"] or ad["price_usd"] < 12000:
         seen.add(ad_id)
         return
 
@@ -223,7 +223,7 @@ def analyze_and_notify(ad, seen, market_listings):
         )
 
         send_telegram(text, ad.get("photo"))
-        print(f"[{datetime.now()}] Отправлено: {ad['title'][:50]} | -{discount*100:.1f}%")
+        print(f"[{datetime.now()}] Отправлено: {ad['title'][:55]} | -{discount*100:.1f}%")
 
     seen.add(ad_id)
 
@@ -234,36 +234,45 @@ def main():
 
     print("Бот по квартирам House.kg запущен...")
     send_telegram(
-        "✅ Бот мониторинга квартир House.kg запущен\n"
+        "✅ Бот House.kg запущен (агрессивный режим)\n"
+        "• Порог: от -8% от рынка\n"
         "• Бишкек + Чуйская область\n"
-        "• Только продажа квартир\n"
-        "• Порог: -15% от рыночной цены за м²\n"
         f"🕐 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
     )
 
     seen = load_seen()
+    first_run = True
 
     while True:
         try:
             print(f"[{datetime.now()}] Проверяю новые объявления...")
 
             all_listings = []
-            for page in [1, 2]:
+            for page in [1, 2, 3]:          # теперь 3 страницы
                 page_listings = get_listings(page)
                 all_listings.extend(page_listings)
-                time.sleep(1.5)
+                time.sleep(1.2)
 
             print(f"Получено объявлений: {len(all_listings)}")
 
-            for ad in all_listings:
-                analyze_and_notify(ad, seen, all_listings)
+            if first_run:
+                # Первый запуск — просто запоминаем всё, ничего не шлём
+                for ad in all_listings:
+                    seen.add(ad["id"])
+                save_seen(seen)
+                first_run = False
+                print("Первый цикл: все текущие объявления помечены.")
+                send_telegram("🔄 Первый цикл завершён. Теперь жду новые выгодные квартиры.")
+            else:
+                for ad in all_listings:
+                    analyze_and_notify(ad, seen, all_listings)
+                save_seen(seen)
 
-            save_seen(seen)
             time.sleep(CHECK_INTERVAL)
 
         except Exception as e:
             print("Ошибка в основном цикле:", e)
-            time.sleep(60)
+            time.sleep(45)
 
 if __name__ == "__main__":
     main()
