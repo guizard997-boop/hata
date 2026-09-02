@@ -14,7 +14,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8876666395:AAFqZNNnqcz-TPiwuVIGzWWxUBHwas-orNg")
 CHAT_ID = os.getenv("CHAT_ID", "8569472160")
 
-CHECK_INTERVAL = 120                 # секунд между проверками
+CHECK_INTERVAL = 40                 # секунд между проверками
 DISCOUNT_THRESHOLD = 0.15            # 15% и больше
 MIN_COMPARABLES = 4
 SEEN_FILE = "seen_apartments.json"
