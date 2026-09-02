@@ -13,7 +13,7 @@ load_dotenv()
 
 # ================== НАСТРОЙКИ ==================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8876666395:AAFqZNNnqcz-TPiwuVIGzWWxUBHwas-orNg")
-CHAT_ID = os.getenv("CHAT_ID", "8569472160")
+CHAT_ID = os.getenv("CHAT_ID", "630689571")
 
 CHECK_INTERVAL = 90                  # проверка каждые 1.5 минуты
 DISCOUNT_THRESHOLD = 0.08            # 8% и больше (было 15%)
