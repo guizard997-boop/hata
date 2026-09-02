@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ================== НАСТРОЙКИ ==================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8876666395:AAFqZNNnqcz-TPiwuVIGzWWxUBHwas-orNg")
+CHAT_ID = os.getenv("CHAT_ID", "8569472160")
 
 CHECK_INTERVAL = 120                 # секунд между проверками
 DISCOUNT_THRESHOLD = 0.15            # 15% и больше
@@ -67,10 +67,8 @@ def send_telegram(text, photo_url=None):
         print("Ошибка отправки в Telegram:", e)
 
 def parse_price(text):
-    """Извлекает число из строки цены"""
     if not text:
         return None
-    # Убираем всё кроме цифр
     digits = re.sub(r"[^\d]", "", text)
     if digits:
         try:
@@ -80,10 +78,6 @@ def parse_price(text):
     return None
 
 def parse_title(title):
-    """
-    Пример: "2-комн. кв., 72 м2, 7 этаж из 7"
-    Возвращает: rooms, area_m2, floor_info
-    """
     rooms = None
     area = None
     floor = None
@@ -91,14 +85,12 @@ def parse_title(title):
     if not title:
         return rooms, area, floor
 
-    # Комнаты
     m = re.search(r"(\d+)\s*[-–]?\s*комн", title, re.IGNORECASE)
     if m:
         rooms = int(m.group(1))
     elif "студи" in title.lower():
         rooms = 0
 
-    # Площадь
     m = re.search(r"([\d.,]+)\s*м2", title.replace(",", "."), re.IGNORECASE)
     if m:
         try:
@@ -106,7 +98,6 @@ def parse_title(title):
         except:
             pass
 
-    # Этаж
     m = re.search(r"(\d+)\s*этаж", title, re.IGNORECASE)
     if m:
         floor = m.group(0)
@@ -114,7 +105,6 @@ def parse_title(title):
     return rooms, area, floor
 
 def get_listings(page=1):
-    """Парсит одну страницу объявлений"""
     url = LISTING_URL.format(page=page)
     try:
         r = requests.get(url, headers=HEADERS, timeout=25)
@@ -137,26 +127,21 @@ def get_listings(page=1):
             ad_id = href.split("/")[-1] if href else None
             full_url = BASE_URL + href if href.startswith("/") else href
 
-            # Заголовок
             title_tag = card.select_one("p.title") or card.select_one(".title") or card.find(itemprop="name")
             title = title_tag.get_text(strip=True) if title_tag else ""
 
-            # Цена в долларах
             price_tag = card.select_one(".price")
             price_text = price_tag.get_text(" ", strip=True) if price_tag else ""
             price_usd = parse_price(price_text)
 
-            # Цена в сомах (дополнительно)
             add_tag = card.select_one(".price-addition")
             price_kgs_text = add_tag.get_text(" ", strip=True) if add_tag else ""
 
             rooms, area, floor = parse_title(title)
 
-            # Адрес (если есть)
             addr_tag = card.find(itemprop="address") or card.select_one(".address")
             address = addr_tag.get_text(strip=True) if addr_tag else ""
 
-            # Фото
             img = card.find("img")
             photo = None
             if img:
@@ -189,12 +174,11 @@ def get_listings(page=1):
     return results
 
 def get_market_price_per_m2(rooms, area, all_recent_listings):
-    """Считаем медианную цену за м² среди похожих квартир"""
     prices = []
     for item in all_recent_listings:
         if item["rooms"] != rooms:
             continue
-        if not item["area"] or abs(item["area"] - area) > area * 0.25:  # ±25% по площади
+        if not item["area"] or abs(item["area"] - area) > area * 0.25:
             continue
         if item["price_per_m2"] and 400 < item["price_per_m2"] < 4000:
             prices.append(item["price_per_m2"])
@@ -221,7 +205,6 @@ def analyze_and_notify(ad, seen, market_listings):
     discount = (market_ppm2 - ad["price_per_m2"]) / market_ppm2
 
     if discount >= DISCOUNT_THRESHOLD:
-        rooms_str = f"{ad['rooms']}-комн." if ad["rooms"] else "Студия"
         text = (
             f"🏠 <b>Выгодная квартира!</b>\n\n"
             f"<b>{ad['title']}</b>\n"
@@ -254,7 +237,8 @@ def main():
         "✅ Бот мониторинга квартир House.kg запущен\n"
         "• Бишкек + Чуйская область\n"
         "• Только продажа квартир\n"
-        "• Порог: -15% от рыночной цены за м²"
+        "• Порог: -15% от рыночной цены за м²\n"
+        f"🕐 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
     )
 
     seen = load_seen()
@@ -263,7 +247,6 @@ def main():
         try:
             print(f"[{datetime.now()}] Проверяю новые объявления...")
 
-            # Берём 2 страницы для более стабильной выборки рынка
             all_listings = []
             for page in [1, 2]:
                 page_listings = get_listings(page)
